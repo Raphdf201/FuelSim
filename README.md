@@ -8,14 +8,15 @@ https://github.com/user-attachments/assets/3b0a20c8-bec2-441b-a4a5-fdaee0f9cb8c
 Simply copy over FuelSim.java into your project!
 ### Setup
 All measurements are in meters. Logging is done automatically when updateSim is called.
-In Robot.java:
+
+Put this directly in Robot.java:
 ```java
 @Override
 public void simulationPeriodic() {
     FuelSim.getInstance().updateSim();
 }
 ```
-In RobotContainer.java (or elsewhere):
+These are functions you can put in RobotContainer.java (or elsewhere) that should be run on initialization. Don't copy over this entire code block. Instead, copy the individual lines you want. You can see an example of what setup could look like down below.
 ```java
 FuelSim.getInstance(); // gets singleton instance of FuelSim
 FuelSim.getInstance().spawnStartingFuel(); // spawns fuel in the depots and neutral zone
@@ -40,6 +41,7 @@ FuelSim.getInstance().start(); // enables the simulation to run (updateSim must 
 FuelSim.getInstance().stop(); // stops the simulation running (updateSim will do nothing until start is called again)
 ```
 ### While Running
+These are methods you can call while the program is running.
 ```java
 FuelSim.getInstance().stepSim(); // steps the simulation forward by 20ms, regardless of start/stop state
 FuelSim.getInstance().spawnFuel(Translation3d pos, Translation3d vel); // spawns a fuel with a given position and velocity (both field centric, represented as vectors by Translation3d)
@@ -49,6 +51,20 @@ FuelSim.Hub.BLUE_HUB.getScore(); // get number of fuel scored in blue hub
 FuelSim.Hub.RED_HUB.getScore(); // get number of fuel scored in red hub
 FuelSim.Hub.[BLUE/RED]_HUB.resetScore(); // resets the score of the blue/red hub
 
+```
+### Non-AdvantageKit logging:
+If you don't use AdvantageKit, replace the `logFuels` method in FuelSim.java with this:
+```java
+    private StructArrayPublisher<Translation3d> fuelPublisher = NetworkTableInstance.getDefault()
+            .getStructArrayTopic("Fuel Simulation/Fuels", Translation3d.struct)
+            .publish();
+    
+    /**
+     * Adds array of `Translation3d`'s to NetworkTables at "/Fuel Simulation/Fuels"
+     */
+    public void logFuels() {
+        fuelPublisher.set(fuels.stream().map((fuel) -> fuel.pos).toArray(Translation3d[]::new));
+    }
 ```
 ## Example Usage (as seen in demo)
 In RobotContainer.java (to be called in constructor):

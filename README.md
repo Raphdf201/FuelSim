@@ -47,6 +47,7 @@ These are methods you can call while the program is running.
 ```java
 FuelSim.getInstance().stepSim(); // steps the simulation forward by 20ms, regardless of start/stop state
 FuelSim.getInstance().spawnFuel(Translation3d pos, Translation3d vel); // spawns a fuel with a given position and velocity (both field centric, represented as vectors by Translation3d)
+FuelSim.getInstance().launchFuel(LinearVelocity launchVelocity, Angle hoodAngle, Angle turretYaw, Distance launchHeight); // Spawns a fuel onto the field at the robot's position with a specified launch velocity and angles, accounting for robot movement (robot must be registered)
 FuelSim.getInstance().clearFuel(); // clears all fuel from the field
 
 FuelSim.Hub.BLUE_HUB.getScore(); // get number of fuel scored in blue hub

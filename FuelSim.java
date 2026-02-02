@@ -1,10 +1,20 @@
 package frc.robot.util;
 
+import static edu.wpi.first.units.Units.Meters;
+import static edu.wpi.first.units.Units.MetersPerSecond;
+import static edu.wpi.first.units.Units.Radians;
+
 import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.geometry.Rotation3d;
+import edu.wpi.first.math.geometry.Transform3d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.geometry.Translation3d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
+import edu.wpi.first.units.measure.Angle;
+import edu.wpi.first.units.measure.Distance;
+import edu.wpi.first.units.measure.LinearVelocity;
 import java.util.ArrayList;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
@@ -97,20 +107,20 @@ public class FuelSim {
 
         private void update() {
             pos = pos.plus(vel.times(PERIOD / subticks));
-						if (pos.getZ() > FUEL_RADIUS) {
-							Translation3d Fg = GRAVITY.times(FUEL_MASS);
-							Translation3d Fd = new Translation3d();
+            if (pos.getZ() > FUEL_RADIUS) {
+                Translation3d Fg = GRAVITY.times(FUEL_MASS);
+                Translation3d Fd = new Translation3d();
 
-							if (simulateAirResistance) {
-								double speed = vel.getNorm();
-								if (speed > 1e-6) {
-									Fd = vel.times(-DRAG_FORCE_FACTOR * speed);
-								}
-							}
+                if (simulateAirResistance) {
+                    double speed = vel.getNorm();
+                    if (speed > 1e-6) {
+                        Fd = vel.times(-DRAG_FORCE_FACTOR * speed);
+                    }
+                }
 
-							Translation3d accel = Fg.plus(Fd).div(FUEL_MASS);
-							vel = vel.plus(accel.times(PERIOD / subticks));
-					  }
+                Translation3d accel = Fg.plus(Fd).div(FUEL_MASS);
+                vel = vel.plus(accel.times(PERIOD / subticks));
+            }
             if (Math.abs(vel.getZ()) < 0.05 && pos.getZ() <= FUEL_RADIUS + 0.03) {
                 vel = new Translation3d(vel.getX(), vel.getY(), 0);
                 vel = vel.times(1 - FRICTION * PERIOD / subticks);
@@ -299,9 +309,9 @@ public class FuelSim {
 
     private ArrayList<Fuel> fuels = new ArrayList<Fuel>();
     private boolean running = false;
-		private boolean simulateAirResistance = false;
-    private Supplier<Pose2d> robotSupplier = null;
-    private Supplier<ChassisSpeeds> robotSpeedsSupplier = null;
+	private boolean simulateAirResistance = false;
+    private Supplier<Pose2d> robotPoseSupplier = null;
+    private Supplier<ChassisSpeeds> robotFieldSpeedsSupplier = null;
     private double robotWidth; // size along the robot's y axis
     private double robotLength; // size along the robot's x axis
     private double bumperHeight;
@@ -384,10 +394,10 @@ public class FuelSim {
         running = false;
     }
 
-		/** Enables accounting for drag force in physics step **/
-		public void enableAirResistance() {
-			simulateAirResistance = true;
-		}
+	/** Enables accounting for drag force in physics step **/
+	public void enableAirResistance() {
+		simulateAirResistance = true;
+	}
 
     /**
      * Sets the number of physics iterations per loop (0.02s)
@@ -411,8 +421,8 @@ public class FuelSim {
             double bumperHeight,
             Supplier<Pose2d> poseSupplier,
             Supplier<ChassisSpeeds> fieldSpeedsSupplier) {
-        this.robotSupplier = poseSupplier;
-        this.robotSpeedsSupplier = fieldSpeedsSupplier;
+        this.robotPoseSupplier = poseSupplier;
+        this.robotFieldSpeedsSupplier = fieldSpeedsSupplier;
         this.robotWidth = width;
         this.robotLength = length;
         this.bumperHeight = bumperHeight;
@@ -439,7 +449,7 @@ public class FuelSim {
 
             handleFuelCollisions(fuels);
 
-            if (robotSupplier != null) {
+            if (robotPoseSupplier != null) {
                 handleRobotCollisions(fuels);
                 handleIntakes(fuels);
             }
@@ -455,6 +465,34 @@ public class FuelSim {
      */
     public void spawnFuel(Translation3d pos, Translation3d vel) {
         fuels.add(new Fuel(pos, vel));
+    }
+
+    /**
+     * Spawns a fuel onto the field with a specified launch velocity and angles, accounting for robot movement
+     * @param launchHeight Height of the fuel to launch at. Make sure this is higher than your robot's bumper height, or else it will collide with your robot immediately.
+     * @param launchVelocity Initial launch velocity
+     * @param hoodAngle Hood angle where 0 is launching horizontally and 90 degrees is launching straight up
+     * @param turretYaw <i>Field-relative</i> turret yaw
+     * @throws IllegalStateException if robot is not registered
+     */
+    public void launchFuel(LinearVelocity launchVelocity, Angle hoodAngle, Angle turretYaw, Distance launchHeight) {
+        if (robotPoseSupplier == null || robotFieldSpeedsSupplier == null) {
+            throw new IllegalStateException("Robot must be registered before launching fuel.");
+        }
+
+        Pose3d launchPose = new Pose3d(this.robotPoseSupplier.get())
+                .plus(new Transform3d(new Translation3d(Meters.zero(), Meters.zero(), launchHeight), Rotation3d.kZero));
+        ChassisSpeeds fieldSpeeds = this.robotFieldSpeedsSupplier.get();
+
+        double horizontalVel = Math.cos(hoodAngle.in(Radians)) * launchVelocity.in(MetersPerSecond);
+        double verticalVel = Math.sin(hoodAngle.in(Radians)) * launchVelocity.in(MetersPerSecond);
+        double xVel = horizontalVel * Math.cos(turretYaw.in(Radians));
+        double yVel = horizontalVel * Math.sin(turretYaw.in(Radians));
+
+        xVel += fieldSpeeds.vxMetersPerSecond;
+        yVel += fieldSpeeds.vyMetersPerSecond;
+
+        spawnFuel(launchPose.getTranslation(), new Translation3d(xVel, yVel, verticalVel));
     }
 
     private void handleRobotCollision(Fuel fuel, Pose2d robot, Translation2d robotVel) {
@@ -499,8 +537,8 @@ public class FuelSim {
     }
 
     private void handleRobotCollisions(ArrayList<Fuel> fuels) {
-        Pose2d robot = robotSupplier.get();
-        ChassisSpeeds speeds = robotSpeedsSupplier.get();
+        Pose2d robot = robotPoseSupplier.get();
+        ChassisSpeeds speeds = robotFieldSpeedsSupplier.get();
         Translation2d robotVel = new Translation2d(speeds.vxMetersPerSecond, speeds.vyMetersPerSecond);
 
         for (Fuel fuel : fuels) {
@@ -509,7 +547,7 @@ public class FuelSim {
     }
 
     private void handleIntakes(ArrayList<Fuel> fuels) {
-        Pose2d robot = robotSupplier.get();
+        Pose2d robot = robotPoseSupplier.get();
         for (SimIntake intake : intakes) {
             for (int i = 0; i < fuels.size(); i++) {
                 if (intake.shouldIntake(fuels.get(i), robot)) {

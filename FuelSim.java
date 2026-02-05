@@ -482,10 +482,10 @@ public class FuelSim {
 
     /**
      * Spawns a fuel onto the field with a specified launch velocity and angles, accounting for robot movement
-     * @param launchHeight Height of the fuel to launch at. Make sure this is higher than your robot's bumper height, or else it will collide with your robot immediately.
      * @param launchVelocity Initial launch velocity
      * @param hoodAngle Hood angle where 0 is launching horizontally and 90 degrees is launching straight up
-     * @param turretYaw <i>Field-relative</i> turret yaw
+     * @param turretYaw <i>Robot-relative</i> turret yaw
+     * @param launchHeight Height of the fuel to launch at. Make sure this is higher than your robot's bumper height, or else it will collide with your robot immediately.
      * @throws IllegalStateException if robot is not registered
      */
     public void launchFuel(LinearVelocity launchVelocity, Angle hoodAngle, Angle turretYaw, Distance launchHeight) {
@@ -499,8 +499,12 @@ public class FuelSim {
 
         double horizontalVel = Math.cos(hoodAngle.in(Radians)) * launchVelocity.in(MetersPerSecond);
         double verticalVel = Math.sin(hoodAngle.in(Radians)) * launchVelocity.in(MetersPerSecond);
-        double xVel = horizontalVel * Math.cos(turretYaw.in(Radians));
-        double yVel = horizontalVel * Math.sin(turretYaw.in(Radians));
+        double xVel = horizontalVel
+                * Math.cos(
+                        turretYaw.plus(launchPose.getRotation().getMeasureZ()).in(Radians));
+        double yVel = horizontalVel
+                * Math.sin(
+                        turretYaw.plus(launchPose.getRotation().getMeasureZ()).in(Radians));
 
         xVel += fieldSpeeds.vxMetersPerSecond;
         yVel += fieldSpeeds.vyMetersPerSecond;

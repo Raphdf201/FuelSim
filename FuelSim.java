@@ -23,7 +23,6 @@ import java.util.function.Supplier;
 
 public class FuelSim {
     protected static final double PERIOD = 0.02; // sec
-    protected static int subticks = 5;
     protected static final Translation3d GRAVITY = new Translation3d(0, 0, -9.81); // m/s^2
     // Room temperature dry air density: https://en.wikipedia.org/wiki/Density_of_air#Dry_air
     protected static final double AIR_DENSITY = 1.2041; // kg/m^3
@@ -104,7 +103,7 @@ public class FuelSim {
             this(pos, new Translation3d());
         }
 
-        protected void update(boolean simulateAirResistance) {
+        protected void update(boolean simulateAirResistance, int subticks) {
             pos = pos.plus(vel.times(PERIOD / subticks));
             if (pos.getZ() > FUEL_RADIUS) {
                 Translation3d Fg = GRAVITY.times(FUEL_MASS);
@@ -125,7 +124,7 @@ public class FuelSim {
                 vel = vel.times(1 - FRICTION * PERIOD / subticks);
                 // pos = new Translation3d(pos.getX(), pos.getY(), FUEL_RADIUS);
             }
-            handleFieldCollisions();
+            handleFieldCollisions(subticks);
         }
 
         protected void handleXZLineCollision(Translation3d lineStart, Translation3d lineEnd) {
@@ -153,7 +152,7 @@ public class FuelSim {
             vel = vel.minus(normal.times((1 + FIELD_COR) * vel.dot(normal)));
         }
 
-        protected void handleFieldCollisions() {
+        protected void handleFieldCollisions(int subticks) {
             // floor and bumps
             for (int i = 0; i < FIELD_XZ_LINE_STARTS.length; i++) {
                 handleXZLineCollision(FIELD_XZ_LINE_STARTS[i], FIELD_XZ_LINE_ENDS[i]);
@@ -177,14 +176,14 @@ public class FuelSim {
             }
 
             // hubs
-            handleHubCollisions(Hub.BLUE_HUB);
-            handleHubCollisions(Hub.RED_HUB);
+            handleHubCollisions(Hub.BLUE_HUB, subticks);
+            handleHubCollisions(Hub.RED_HUB, subticks);
 
             handleTrenchCollisions();
         }
 
-        protected void handleHubCollisions(Hub hub) {
-            hub.handleHubInteraction(this);
+        protected void handleHubCollisions(Hub hub, int subticks) {
+            hub.handleHubInteraction(this, subticks);
             hub.fuelCollideSide(this);
 
             double netCollision = hub.fuelHitNet(this);
@@ -315,6 +314,7 @@ public class FuelSim {
     protected double robotLength; // size along the robot's x axis
     protected double bumperHeight;
     protected ArrayList<SimIntake> intakes = new ArrayList<>();
+    protected int subticks = 5;
 
     /**
      * Creates a new instance of FuelSim
@@ -416,8 +416,8 @@ public class FuelSim {
      * Sets the number of physics iterations per loop (0.02s)
      * @param subticks
      */
-    public static void setSubticks(int subticks) {
-        FuelSim.subticks = subticks;
+    public void setSubticks(int subticks) {
+        this.subticks = subticks;
     }
 
     /**
@@ -457,7 +457,7 @@ public class FuelSim {
     public void stepSim() {
         for (int i = 0; i < subticks; i++) {
             for (Fuel fuel : fuels) {
-                fuel.update(this.simulateAirResistance);
+                fuel.update(this.simulateAirResistance, this.subticks);
             }
 
             handleFuelCollisions(fuels);
@@ -695,15 +695,15 @@ public class FuelSim {
             this.exitVelXMult = exitVelXMult;
         }
 
-        protected void handleHubInteraction(Fuel fuel) {
-            if (didFuelScore(fuel)) {
+        protected void handleHubInteraction(Fuel fuel, int subticks) {
+            if (didFuelScore(fuel, subticks)) {
                 fuel.pos = exit;
                 fuel.vel = getDispersalVelocity();
                 score++;
             }
         }
 
-        protected boolean didFuelScore(Fuel fuel) {
+        protected boolean didFuelScore(Fuel fuel, int subticks) {
             return fuel.pos.toTranslation2d().getDistance(center) <= ENTRY_RADIUS
                     && fuel.pos.getZ() <= ENTRY_HEIGHT
                     && fuel.pos.minus(fuel.vel.times(PERIOD / subticks)).getZ() > ENTRY_HEIGHT;
